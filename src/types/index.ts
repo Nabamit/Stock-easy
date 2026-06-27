@@ -107,6 +107,7 @@ export interface Bill {
   original_bill_id: string | null;
   created_by: string | null;
   created_at: string;
+  doctor_name?: string | null;
   items?: BillItem[];
 }
 
@@ -137,6 +138,8 @@ export interface SessionPayload {
   shopId: string | null;
   shopVerified: boolean;
   shopName: string | null;
+  shopPhotoUrl?: string | null;
+  ownerName?: string | null;
 }
 
 export interface DashboardKPIs {

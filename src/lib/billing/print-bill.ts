@@ -15,28 +15,46 @@ function formatBillDate(date: string): string {
 
 /** Build printable HTML — always includes pharmacy watermark (matches tax invoice layout). */
 export function buildBillPrintHtml(data: BillPrintData): string {
-  const { bill, items, shopName, shopAddress, shopGstin, cashierName } = data;
+  const { bill, items, shopName, shopAddress, shopPhone, shopGstin, cashierName } = data;
   const isReturn = bill.is_return;
   const title = isReturn ? "RETURN INVOICE" : "TAX INVOICE";
 
-  const rows = items
+  const consolidated = items.reduce((acc, current) => {
+    const existing = acc.find((x) => x.medicine_name === current.medicine_name);
+    if (existing) {
+      existing.quantity += current.quantity;
+      existing.line_total = Number(existing.line_total) + Number(current.line_total);
+    } else {
+      acc.push({
+        ...current,
+        line_total: Number(current.line_total)
+      });
+    }
+    return acc;
+  }, [] as Array<typeof items[number] & { line_total: number }>);
+
+  const rows = consolidated
     .map(
       (i) => `
       <tr>
         <td>
           <div class="item-name">${i.medicine_name}</div>
-          <div class="item-batch">Batch: ${i.batch_no}</div>
         </td>
         <td class="num">${i.quantity}</td>
-        <td class="num">${formatInr(Number(i.line_total))}</td>
+        <td class="num">${formatInr(i.line_total)}</td>
       </tr>`
     )
     .join("");
 
   const subtotal = Number(bill.subtotal);
+  const discount = Number(bill.discount_amount);
   const cgst = Number(bill.cgst_amount);
   const sgst = Number(bill.sgst_amount);
   const total = Number(bill.total_amount);
+
+  const discountRow = discount > 0 
+    ? `<div class="row" style="color: #dc2626; font-weight: 500;"><span>Discount</span><span>-${formatInr(discount)}</span></div>` 
+    : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -122,13 +140,16 @@ export function buildBillPrintHtml(data: BillPrintData): string {
     <div class="shop-name">${shopName}</div>
     <div class="shop-meta">
       ${shopAddress ? `${shopAddress}<br/>` : ""}
+      ${shopPhone ? `Phone: ${shopPhone}<br/>` : ""}
       ${shopGstin ? `GSTIN: ${shopGstin}` : ""}
     </div>
     <div class="invoice-title">${title}</div>
     <div class="meta">
       <div><strong>Bill:</strong> ${bill.bill_no}</div>
       <div><strong>Date:</strong> ${formatBillDate(bill.created_at)}</div>
+      <div><strong>Doctor:</strong> ${bill.doctor_name ?? "Self"}</div>
       <div><strong>Customer:</strong> ${bill.customer_name ?? "Walk-in"}</div>
+      ${bill.customer_phone ? `<div><strong>Cust. Phone:</strong> ${bill.customer_phone}</div>` : ""}
       <div><strong>Cashier:</strong> ${cashierName}</div>
       ${isReturn ? `<div><strong>Type:</strong> Return / Credit Note</div>` : ""}
     </div>
@@ -144,8 +165,9 @@ export function buildBillPrintHtml(data: BillPrintData): string {
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>${formatInr(subtotal)}</span></div>
-      <div class="row"><span>CGST</span><span>${formatInr(cgst)}</span></div>
-      <div class="row"><span>SGST</span><span>${formatInr(sgst)}</span></div>
+      ${discountRow}
+      <div class="row"><span>CGST (2.5%)</span><span>${formatInr(cgst)}</span></div>
+      <div class="row"><span>SGST (2.5%)</span><span>${formatInr(sgst)}</span></div>
       <div class="total-row"><span>Total</span><span>${isReturn ? "-" : ""}${formatInr(total)}</span></div>
     </div>
     <div class="footer">Thank you! Get well soon. — ${shopName}</div>

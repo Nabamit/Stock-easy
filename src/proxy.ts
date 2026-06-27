@@ -6,29 +6,82 @@ import type { SessionPayload } from "@/types";
 
 function getSecretKey(): Uint8Array {
   const secret = process.env.SESSION_SECRET;
-  if (!secret) return new TextEncoder().encode("dev-secret-change-in-production-32chars");
+  if (!secret) {
+    console.warn("SESSION_SECRET is not defined in proxy.ts, falling back to dev secret.");
+    return new TextEncoder().encode("dev-secret-change-in-production-32chars");
+  }
   return new TextEncoder().encode(secret);
 }
 
 async function getSessionFromRequest(
   request: NextRequest
 ): Promise<SessionPayload | null> {
+  const allCookies = request.cookies.getAll();
+  console.log("Proxy Cookies:", allCookies.map(c => c.name));
+  
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
+  if (!token) {
+    console.log(`Proxy: Cookie "${SESSION_COOKIE}" was NOT found.`);
+    return null;
+  }
+  
   try {
     const { payload } = await jwtVerify(token, getSecretKey());
+    console.log("Proxy JWT Success. Role:", payload.role, "ShopVerified:", (payload as any).shopVerified);
     return payload as unknown as SessionPayload;
-  } catch {
+  } catch (error) {
+    console.error("Proxy JWT verification failed:", error);
     return null;
   }
 }
 
-const shopPaths = ["/dashboard", "/billing", "/medicines", "/stock", "/inventory", "/dealers", "/analytics", "/ai", "/bills", "/settings"];
-const adminPaths = ["/admin/dashboard", "/admin/verification", "/admin/shops", "/admin/billing", "/admin/analytics"];
+const shopPaths = ["/dashboard", "/billing", "/medicines", "/stock", "/inventory", "/dealers", "/analytics", "/ai", "/bills", "/sales", "/settings"];
+const adminPaths = ["/admin/dashboard", "/admin/verification", "/admin/shops", "/admin/billing", "/admin/analytics", "/admin/panel", "/admin/support", "/admin/settings"];
 
-export async function middleware(request: NextRequest) {
+import { createClient } from "@supabase/supabase-js";
+
+async function isMaintenanceModeActive(): Promise<boolean> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return false;
+  try {
+    const supabase = createClient(url, anonKey, {
+      auth: { persistSession: false },
+    });
+    const { data } = await supabase
+      .from("platform_settings")
+      .select("maintenance_mode")
+      .eq("id", "00000000-0000-0000-0000-000000000001")
+      .single();
+    return !!data?.maintenance_mode;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  
+  if (
+    pathname === "/maintenance" ||
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/api/") ||
+    pathname.includes(".")
+  ) {
+    return NextResponse.next();
+  }
+
   const session = await getSessionFromRequest(request);
+
+  // Enforce Maintenance Redirect
+  const maintenanceActive = await isMaintenanceModeActive();
+  if (maintenanceActive) {
+    const isCentralAdmin = session?.role === "central_admin";
+    const isAdminLoginRoute = pathname === "/admin/login";
+    if (!isCentralAdmin && !isAdminLoginRoute) {
+      return NextResponse.redirect(new URL("/maintenance", request.url));
+    }
+  }
 
   const isShopRoute = shopPaths.some((p) => pathname === p || pathname.startsWith(p + "/"));
   const isAdminRoute = adminPaths.some((p) => pathname === p || pathname.startsWith(p + "/"));
@@ -39,8 +92,8 @@ export async function middleware(request: NextRequest) {
     if (session.role === "central_admin") {
       return NextResponse.redirect(new URL(ROUTES.adminDashboard, request.url));
     }
-    if (!session.shopVerified) {
-      return NextResponse.redirect(new URL(ROUTES.shopPending, request.url));
+    if (session.role === "shop_staff") {
+      return NextResponse.redirect(new URL("/billing", request.url));
     }
     return NextResponse.redirect(new URL(ROUTES.shopDashboard, request.url));
   }
@@ -57,8 +110,15 @@ export async function middleware(request: NextRequest) {
     if (session.role === "central_admin") {
       return NextResponse.redirect(new URL(ROUTES.adminDashboard, request.url));
     }
-    if (!session.shopVerified) {
-      return NextResponse.redirect(new URL(ROUTES.shopPending, request.url));
+    // Staff route limitation
+    if (session.role === "shop_staff") {
+      const allowedPaths = ["/billing", "/inventory", "/ai", "/bills", "/sales"];
+      const isAllowed = allowedPaths.some(
+        (p) => pathname === p || pathname.startsWith(p + "/")
+      );
+      if (!isAllowed) {
+        return NextResponse.redirect(new URL("/billing", request.url));
+      }
     }
   }
 

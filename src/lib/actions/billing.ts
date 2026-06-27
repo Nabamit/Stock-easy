@@ -16,6 +16,7 @@ const cartItemSchema = z.object({
 const createBillSchema = z.object({
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
+  doctorName: z.string().optional(),
   paymentMode: z.string().default("cash"),
   items: z.array(cartItemSchema).min(1),
 });
@@ -34,8 +35,53 @@ export async function createBillAction(input: z.infer<typeof createBillSchema>) 
   const parsed = createBillSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Invalid bill data" };
 
-  const { shopId, userId } = await getShopContext();
+  const { shopId, userId, session } = await getShopContext();
+  if (!session.shopVerified) {
+    return { success: false, error: "Action blocked. Shop verification is pending." };
+  }
   const db = getDb();
+
+  // Enforce Subscription Limits
+  const { getShopSubscriptionLimit } = await import("@/lib/actions/subscription-limits");
+  const limits = await getShopSubscriptionLimit(shopId);
+
+  // 1. Daily billing limit check
+  const todayStr = new Date().toISOString().split("T")[0];
+  const { count: todayBillsCount } = await db
+    .from("bills")
+    .select("id", { count: "exact", head: true })
+    .eq("shop_id", shopId)
+    .gte("created_at", todayStr + "T00:00:00");
+
+  if (todayBillsCount !== null && todayBillsCount >= limits.dailyBillingLimit) {
+    return {
+      success: false,
+      error: `Daily billing limit of ${limits.dailyBillingLimit} bills reached. Please upgrade your subscription plan.`,
+    };
+  }
+
+  // 2. Bill history FIFO overwrite check
+  const { count: totalBills } = await db
+    .from("bills")
+    .select("id", { count: "exact", head: true })
+    .eq("shop_id", shopId);
+
+  if (totalBills !== null && totalBills >= limits.billHistoryLimit) {
+    const toDelete = totalBills - limits.billHistoryLimit + 1;
+    if (toDelete > 0) {
+      const { data: oldestBills } = await db
+        .from("bills")
+        .select("id")
+        .eq("shop_id", shopId)
+        .order("created_at", { ascending: true })
+        .limit(toDelete);
+      
+      if (oldestBills && oldestBills.length > 0) {
+        const ids = oldestBills.map((b) => b.id);
+        await db.from("bills").delete().in("id", ids);
+      }
+    }
+  }
 
   const { data: billNoData } = await db.rpc("generate_bill_no", { p_shop_id: shopId });
   const billNo = billNoData as string;
@@ -104,6 +150,7 @@ export async function createBillAction(input: z.infer<typeof createBillSchema>) 
       bill_no: billNo,
       customer_name: parsed.data.customerName || null,
       customer_phone: parsed.data.customerPhone || null,
+      doctor_name: parsed.data.doctorName || "Dr. S.K. Roy",
       subtotal,
       discount_amount: discountAmount,
       taxable_amount: taxableAmount,

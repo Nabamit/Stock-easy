@@ -19,7 +19,7 @@ export async function getBillPrintDataAction(billId: string): Promise<BillPrintD
 
   const [{ data: items }, { data: shop }, { data: cashier }] = await Promise.all([
     db.from("bill_items").select("*").eq("bill_id", billId).order("created_at"),
-    db.from("shops").select("name, address, city, gst_no").eq("id", shopId).single(),
+    db.from("shops").select("name, address, city, gst_no, phone").eq("id", shopId).single(),
     bill.created_by
       ? db.from("users").select("name").eq("id", bill.created_by).single()
       : Promise.resolve({ data: null }),
@@ -32,6 +32,7 @@ export async function getBillPrintDataAction(billId: string): Promise<BillPrintD
     items: items ?? [],
     shopName: shop?.name ?? "Pharmacy",
     shopAddress: address,
+    shopPhone: shop?.phone ?? "",
     shopGstin: shop?.gst_no ?? "",
     cashierName: cashier?.name ?? "Staff",
   };

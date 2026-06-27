@@ -3,7 +3,7 @@
  * Run: npm run db:seed
  *
  * Creates:
- * - admin@stockeasy.in / admin123 (central_admin)
+ * - nabamitdutta14@gmail.com / Nabamitdutta@1442002 (central_admin)
  * - Test Pharmacy (approved) - owner1@test.com / owner123
  * - Pending Pharmacy (pending) - owner2@test.com / owner123
  */
@@ -79,25 +79,45 @@ async function main() {
   console.log(`Connected to: ${new URL(url).host}\n`);
 
   // --- Central Admin ---
-  const adminHash = await hash("admin123");
+  const adminHash = await hash("Nabamitdutta@1442002");
   const { data: existingAdmin } = await db
     .from("users")
     .select("id")
-    .eq("email", "admin@stockeasy.in")
+    .eq("email", "nabamitdutta14@gmail.com")
     .maybeSingle();
 
   if (!existingAdmin) {
     const { error } = await db.from("users").insert({
-      email: "admin@stockeasy.in",
+      email: "nabamitdutta14@gmail.com",
       password_hash: adminHash,
       name: "Platform Admin",
       role: "central_admin",
       shop_id: null,
+      is_super: true,
     });
     if (error) console.error("Admin seed error:", error.message);
-    else console.log("✓ Admin: admin@stockeasy.in / admin123");
+    else console.log("✓ Admin: nabamitdutta14@gmail.com / Nabamitdutta@1442002");
   } else {
-    console.log("• Admin already exists, skipping");
+    const { error } = await db
+      .from("users")
+      .update({
+        password_hash: adminHash,
+        is_super: true,
+      })
+      .eq("email", "nabamitdutta14@gmail.com");
+    if (error) console.error("Admin update error:", error.message);
+    else console.log("✓ Updated Admin password: nabamitdutta14@gmail.com / Nabamitdutta@1442002");
+  }
+
+  // Clean up legacy default admin if present
+  const { error: cleanupError } = await db
+    .from("users")
+    .delete()
+    .eq("email", "admin@stockeasy.in");
+  if (cleanupError) {
+    console.error("Legacy admin cleanup error:", cleanupError.message);
+  } else {
+    console.log("✓ Removed legacy admin@stockeasy.in account if it existed.");
   }
 
   // --- Verified Shop: Test Pharmacy ---

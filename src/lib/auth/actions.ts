@@ -1,6 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/lib/supabase/server";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
@@ -46,13 +46,14 @@ export type AuthActionResult = {
   success: boolean;
   error?: string;
   fieldErrors?: Record<string, string[]>;
+  redirectUrl?: string;
 };
 
 // ==========================================
 // HELPER UTILS
 // ==========================================
 
-async function buildSession(userId: string): Promise<SessionPayload | null> {
+export async function buildSession(userId: string): Promise<SessionPayload | null> {
   const db = getDb();
 
   const { data: user, error } = await db
@@ -65,17 +66,24 @@ async function buildSession(userId: string): Promise<SessionPayload | null> {
 
   let shopVerified = false;
   let shopName: string | null = null;
+  let shopPhotoUrl: string | null = null;
+  let ownerName: string | null = null;
 
   if (user.shop_id) {
     const { data: shop } = await db
       .from("shops")
-      .select("name, verification_status")
+      .select("name, verification_status, shop_photo_url, owner_name")
       .eq("id", user.shop_id)
       .single();
 
     if (shop) {
       shopName = shop.name;
       shopVerified = shop.verification_status === "approved";
+      // Avoid inserting massive base64 image strings into the session cookie (browser limit 4KB)
+      shopPhotoUrl = (shop.shop_photo_url && !shop.shop_photo_url.startsWith("data:"))
+        ? shop.shop_photo_url
+        : null;
+      ownerName = shop.owner_name;
     }
   }
 
@@ -87,6 +95,8 @@ async function buildSession(userId: string): Promise<SessionPayload | null> {
     shopId: user.shop_id,
     shopVerified,
     shopName,
+    shopPhotoUrl,
+    ownerName,
   };
 }
 
@@ -132,6 +142,20 @@ export async function loginAction(
     return { success: false, error: "Account is inactive or not found" };
   }
 
+  // Check maintenance mode
+  const { data: settings } = await db
+    .from("platform_settings")
+    .select("maintenance_mode")
+    .eq("id", "00000000-0000-0000-0000-000000000001")
+    .single();
+
+  if (settings?.maintenance_mode && session.role !== "central_admin") {
+    return {
+      success: false,
+      error: "The platform is currently undergoing maintenance. Only central administrators are allowed to log in at this time.",
+    };
+  }
+
   const token = await createSessionToken(session);
   await setSessionCookie(token);
 
@@ -141,6 +165,10 @@ export async function loginAction(
 
   if (!session.shopVerified) {
     redirect(ROUTES.shopPending);
+  }
+
+  if (session.role === "shop_staff") {
+    redirect("/billing");
   }
 
   redirect(ROUTES.shopDashboard);
@@ -296,19 +324,76 @@ export async function registerAction(
     redirect(ROUTES.shopPending);
 
   } catch (error) {
-    // Structural Guard: Intercept Next.js client routing redirects and route cleanly
-    if (
-      (error instanceof Error && error.message === "NEXT_REDIRECT") ||
-      (typeof error === "object" && error !== null && "digest" in error && String(error.digest).startsWith("NEXT_REDIRECT"))
-    ) {
-      throw error;
-    }
+    unstable_rethrow(error);
 
     console.error("Critical Exception caught during registration action execution:", error);
     return { 
       success: false, 
       error: "An unexpected runtime error occurred on the application server during submission." 
     };
+  }
+}
+
+export async function firebaseLoginAction(
+  email: string,
+  password?: string,
+  name?: string
+): Promise<AuthActionResult> {
+  try {
+    const db = getDb();
+    
+    const { data: user, error } = await db
+      .from("users")
+      .select("id, is_active, role, password_hash")
+      .eq("email", email.toLowerCase())
+      .single();
+
+    if (error || !user) {
+      return { success: false, error: "No matching account found. Please register first." };
+    }
+
+    if (!user.is_active) {
+      return { success: false, error: "Account is inactive." };
+    }
+
+    // If password is provided, verify it
+    if (password) {
+      const valid = await verifyPassword(password, user.password_hash || "");
+      if (!valid) {
+        return { success: false, error: "Invalid email or password." };
+      }
+    }
+
+    const session = await buildSession(user.id);
+    if (!session) {
+      return { success: false, error: "Session creation failed." };
+    }
+
+    // Check maintenance mode
+    const { data: settings } = await db
+      .from("platform_settings")
+      .select("maintenance_mode")
+      .eq("id", "00000000-0000-0000-0000-000000000001")
+      .single();
+
+    if (settings?.maintenance_mode && session.role !== "central_admin") {
+      return {
+        success: false,
+        error: "The platform is currently undergoing maintenance. Only central administrators are allowed to log in at this time.",
+      };
+    }
+
+    const token = await createSessionToken(session);
+    await setSessionCookie(token);
+
+    // Determine redirect URL based on user role
+    const redirectUrl = user.role === "central_admin" ? "/admin/dashboard" : "/dashboard";
+
+    return { success: true, redirectUrl };
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("Error in firebaseLoginAction:", error);
+    return { success: false, error: error instanceof Error ? error.message : "An unexpected database or runtime error occurred." };
   }
 }
 
@@ -342,8 +427,22 @@ export async function requireVerifiedShopSession(): Promise<SessionPayload> {
   if (session.role === "central_admin") {
     redirect(ROUTES.adminDashboard);
   }
+
+  if (session.shopId) {
+    const { getDb } = await import("@/lib/supabase/server");
+    const db = getDb();
+    const { data: shop } = await db
+      .from("shops")
+      .select("verification_status")
+      .eq("id", session.shopId)
+      .single();
+
+    session.shopVerified = shop?.verification_status === "approved";
+  }
+
   if (!session.shopVerified) {
     redirect(ROUTES.shopPending);
   }
+
   return session;
 }

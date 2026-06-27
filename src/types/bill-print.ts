@@ -5,6 +5,7 @@ export interface BillPrintData {
   items: BillItem[];
   shopName: string;
   shopAddress: string;
+  shopPhone: string;
   shopGstin: string;
   cashierName: string;
 }

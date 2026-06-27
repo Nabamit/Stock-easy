@@ -8,6 +8,7 @@ import {
   Plus,
   Warehouse,
   Skull,
+  Lock,
 } from "lucide-react";
 import { requireVerifiedShopSession } from "@/lib/auth/actions";
 import { getShopDashboardData } from "@/lib/data/dashboard";
@@ -34,22 +35,67 @@ export default async function ShopDashboardPage() {
           <p className="text-muted-foreground">{session.shopName}</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/billing">
-            <Button className="gap-2"><Plus className="h-4 w-4" /> New Bill</Button>
-          </Link>
-          <Link href="/stock">
-            <Button variant="outline" className="gap-2"><Package className="h-4 w-4" /> Add Stock</Button>
-          </Link>
+          {session.shopVerified ? (
+            <>
+              <Link href="/billing">
+                <Button className="gap-2"><Plus className="h-4 w-4" /> New Bill</Button>
+              </Link>
+              <Link href="/stock">
+                <Button variant="outline" className="gap-2"><Package className="h-4 w-4" /> Add Stock</Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Button disabled className="gap-2 opacity-60 cursor-not-allowed">
+                <Lock className="h-4 w-4" /> New Bill (Locked)
+              </Button>
+              <Button disabled variant="outline" className="gap-2 opacity-60 cursor-not-allowed">
+                <Lock className="h-4 w-4" /> Add Stock (Locked)
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <KpiCard title="Total Stock" value={kpis.totalStock} subtitle="units" icon={Warehouse} />
-        <KpiCard title="Stock Value" value={formatCurrency(kpis.stockValue)} icon={IndianRupee} iconClassName="bg-blue-100 text-blue-600" />
-        <KpiCard title="Near Expiry" value={kpis.expiringSoonCount} subtitle="≤90 days" icon={Clock} iconClassName="bg-amber-100 text-amber-600" />
-        <KpiCard title="Low Stock" value={kpis.lowStockCount} icon={AlertTriangle} iconClassName="bg-orange-100 text-orange-600" />
-        <KpiCard title="Dead Stock" value={kpis.deadStockCount} icon={Skull} iconClassName="bg-red-100 text-red-600" />
-        <KpiCard title="Medicines" value={kpis.totalMedicines} icon={Pill} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        <KpiCard
+          title="Total Stock"
+          value={kpis.totalStock}
+          subtitle="units"
+          icon={Warehouse}
+          iconClassName="bg-teal-50 text-teal-600 dark:bg-teal-950/30 dark:text-teal-400"
+        />
+        <KpiCard
+          title="Stock Value"
+          value={formatCurrency(kpis.stockValue)}
+          icon={IndianRupee}
+          iconClassName="bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400"
+        />
+        <KpiCard
+          title="Near Expiry"
+          value={kpis.expiringSoonCount}
+          subtitle="≤90 days"
+          icon={Clock}
+          iconClassName="bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400"
+        />
+        <KpiCard
+          title="Low Stock"
+          value={kpis.lowStockCount}
+          icon={AlertTriangle}
+          iconClassName="bg-orange-50 text-orange-600 dark:bg-orange-950/30 dark:text-orange-400"
+        />
+        <KpiCard
+          title="Dead Stock"
+          value={kpis.deadStockCount}
+          icon={Skull}
+          iconClassName="bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400"
+        />
+        <KpiCard
+          title="Medicines"
+          value={kpis.totalMedicines}
+          icon={Pill}
+          iconClassName="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

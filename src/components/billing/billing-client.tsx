@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Search, ShoppingCart, Trash2, Printer, Loader2 } from "lucide-react";
+import { Search, ShoppingCart, Trash2, Printer, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,6 +44,7 @@ interface CartItem {
   unitPrice: number;
   discountPercent: number;
   isRecommended: boolean;
+  maxQty: number;
 }
 
 function calcLine(item: CartItem) {
@@ -55,12 +56,13 @@ function calcLine(item: CartItem) {
   return { sub, disc, taxable, cgst, sgst, total: taxable + cgst + sgst };
 }
 
-export function BillingClient({ shopName }: { shopName: string }) {
+export function BillingClient({ shopName, isVerified = true }: { shopName: string; isVerified?: boolean }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FefoMedicine[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [doctorName, setDoctorName] = useState("Dr. S.K. Roy");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [isSearching, startSearch] = useTransition();
   const [isSaving, startSave] = useTransition();
@@ -96,6 +98,7 @@ export function BillingClient({ shopName }: { shopName: string }) {
           unitPrice: Number(batch.selling_price),
           discountPercent: med.defaultDiscount,
           isRecommended: batch.id === med.recommendedBatchId,
+          maxQty: batch.quantity_remaining,
         },
       ];
     });
@@ -108,7 +111,19 @@ export function BillingClient({ shopName }: { shopName: string }) {
 
   function updateCart(batchId: string, field: "quantity" | "discountPercent", value: number) {
     setCart((prev) =>
-      prev.map((c) => (c.batchId === batchId ? { ...c, [field]: value } : c))
+      prev.map((c) => {
+        if (c.batchId === batchId) {
+          if (field === "quantity") {
+            const max = c.maxQty;
+            if (value > max) {
+              toast.error(`Cannot sell more than available stock (${max} units).`);
+              return { ...c, quantity: max };
+            }
+          }
+          return { ...c, [field]: value };
+        }
+        return c;
+      })
     );
   }
 
@@ -132,6 +147,7 @@ export function BillingClient({ shopName }: { shopName: string }) {
       const result = await createBillAction({
         customerName,
         customerPhone,
+        doctorName,
         paymentMode,
         items: cart.map((c) => ({
           medicineId: c.medicineId,
@@ -150,6 +166,10 @@ export function BillingClient({ shopName }: { shopName: string }) {
       setCart([]);
       setResults([]);
       setQuery("");
+      setCustomerName("");
+      setCustomerPhone("");
+      setDoctorName("Dr. S.K. Roy");
+      setPaymentMode("cash");
     });
   }
 
@@ -159,8 +179,25 @@ export function BillingClient({ shopName }: { shopName: string }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-2">
+    <div className="space-y-6 relative min-h-[400px]">
+      {!isVerified && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-6 bg-background/50 backdrop-blur-md rounded-2xl border border-dashed border-muted-foreground/30">
+          <Card className="max-w-md w-full text-center p-6 shadow-2xl border border-primary/20 bg-card/95 relative overflow-hidden">
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl" />
+            <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary">
+              <Lock className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-xl font-bold mb-2">Verification Pending</CardTitle>
+            <p className="text-sm text-muted-foreground mb-6">
+              Billing and invoice generation are locked. Once your shop is verified and approved by our central admin team, you will be able to search medicines and generate bills.
+            </p>
+            <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg border border-amber-200/50">
+              Verification usually takes 24–48 hours. Please ensure your documents are valid.
+            </div>
+          </Card>
+        </div>
+      )}
+      <div className={!isVerified ? "blur-sm pointer-events-none select-none grid gap-6 lg:grid-cols-2" : "grid gap-6 lg:grid-cols-2"}>
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Search Medicine (FEFO)</CardTitle>
@@ -273,7 +310,7 @@ export function BillingClient({ shopName }: { shopName: string }) {
               ))
             )}
 
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               <div>
                 <Label>Customer Name</Label>
                 <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
@@ -281,6 +318,10 @@ export function BillingClient({ shopName }: { shopName: string }) {
               <div>
                 <Label>Phone</Label>
                 <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+              </div>
+              <div>
+                <Label>Doctor Name</Label>
+                <Input value={doctorName} onChange={(e) => setDoctorName(e.target.value)} />
               </div>
             </div>
             <div>

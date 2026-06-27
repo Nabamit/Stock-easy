@@ -21,10 +21,13 @@ export function VerificationActions({ shopId }: { shopId: string }) {
   }
 
   function handleReject() {
+    const notes = window.prompt("Enter rejection notes/reason (optional):");
+    if (notes === null) return; // User clicked Cancel
+    
     startTransition(async () => {
-      const result = await rejectShopAction(shopId);
+      const result = await rejectShopAction(shopId, notes || undefined);
       if (result.success) {
-        toast.success("Shop rejected");
+        toast.success("Shop rejected successfully");
       } else {
         toast.error(result.error ?? "Failed to reject");
       }

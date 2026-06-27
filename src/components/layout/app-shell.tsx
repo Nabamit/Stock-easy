@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Sidebar } from "@/components/layout/sidebar";
 import { logoutAction } from "@/lib/auth/actions";
 import type { SessionPayload } from "@/types";
+import { VerificationBanner } from "@/components/layout/verification-banner";
+import { NotificationBell } from "@/components/layout/notification-bell";
 
 interface AppShellProps {
   session: SessionPayload;
@@ -38,13 +40,18 @@ export function AppShell({ session, children, title }: AppShellProps) {
             {title && <h1 className="text-lg font-semibold">{title}</h1>}
           </div>
 
-          <form action={logoutAction}>
-            <Button variant="ghost" size="sm" type="submit" className="gap-2">
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Logout</span>
-            </Button>
-          </form>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <form action={logoutAction}>
+              <Button variant="ghost" size="sm" type="submit" className="gap-2">
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Logout</span>
+              </Button>
+            </form>
+          </div>
         </header>
+
+        <VerificationBanner session={session} />
 
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>

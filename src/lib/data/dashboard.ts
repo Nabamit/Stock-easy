@@ -56,21 +56,44 @@ export async function getShopDashboardData(shopId: string) {
   const monthSales = (monthSalesRes.data ?? []).reduce((s, b) => s + Number(b.total_amount), 0);
 
   // Low stock count: medicines where total batch qty < min_stock_level
-  const { data: batchQtys } = await db
-    .from("batches")
-    .select("medicine_id, quantity_remaining, medicines(min_stock_level)")
-    .eq("shop_id", shopId)
-    .gt("quantity_remaining", 0);
-
+  const [medRes, batchRes] = await Promise.all([
+    db
+      .from("medicines")
+      .select("id, min_stock_level")
+      .eq("shop_id", shopId)
+      .eq("is_active", true),
+    db
+      .from("batches")
+      .select("medicine_id, quantity_remaining")
+      .eq("shop_id", shopId)
+      .gt("quantity_remaining", 0)
+  ]);
   const stockByMed: Record<string, { total: number; min: number }> = {};
-  for (const b of batchQtys ?? []) {
-    const med = b.medicines as unknown as { min_stock_level: number };
-    if (!stockByMed[b.medicine_id]) {
-      stockByMed[b.medicine_id] = { total: 0, min: med?.min_stock_level ?? 10 };
-    }
-    stockByMed[b.medicine_id].total += b.quantity_remaining;
+  for (const m of medRes.data ?? []) {
+    stockByMed[m.id] = { total: 0, min: m.min_stock_level ?? 10 };
   }
-  const lowStockCount = Object.values(stockByMed).filter((s) => s.total < s.min).length;
+  for (const b of batchRes.data ?? []) {
+    if (stockByMed[b.medicine_id]) {
+      stockByMed[b.medicine_id].total += b.quantity_remaining;
+    }
+  }
+
+  // A batch is low stock if its quantity is less than the medicine's min_stock_level.
+  // Also count out-of-stock medicines.
+  let lowStockCount = 0;
+  for (const b of batchRes.data ?? []) {
+    const min = stockByMed[b.medicine_id]?.min ?? 10;
+    if (b.quantity_remaining < min) {
+      lowStockCount++;
+    }
+  }
+  for (const m of medRes.data ?? []) {
+    const total = stockByMed[m.id]?.total ?? 0;
+    const min = stockByMed[m.id]?.min ?? 10;
+    if (total === 0 && total < min) {
+      lowStockCount++;
+    }
+  }
 
   // Sales trend by day
   const salesByDay: Record<string, number> = {};
@@ -117,19 +140,34 @@ export async function getShopDashboardData(shopId: string) {
 export async function getAdminDashboardData() {
   const db = getDb();
 
-  const [shopsRes, pendingRes, approvedRes, usersRes, billsRes] = await Promise.all([
-    db.from("shops").select("id, name, verification_status, city, created_at").order("created_at", { ascending: false }),
+  const [shopsRes, pendingRes, approvedRes, usersRes, billsRes, medicinesRes, allBillsRes] = await Promise.all([
+    db.from("shops").select("id, name, verification_status, city, created_at, subscription_plans(name)").order("created_at", { ascending: false }),
     db.from("shops").select("id", { count: "exact", head: true }).eq("verification_status", "pending"),
     db.from("shops").select("id", { count: "exact", head: true }).eq("verification_status", "approved"),
     db.from("users").select("id", { count: "exact", head: true }).neq("role", "central_admin"),
     db.from("bills").select("total_amount, created_at").gte("created_at", new Date(new Date().setDate(1)).toISOString()),
+    db.from("medicines").select("id", { count: "exact", head: true }),
+    db.from("bills").select("id", { count: "exact", head: true }),
   ]);
 
   const platformRevenue = (billsRes.data ?? []).reduce((s, b) => s + Number(b.total_amount), 0);
 
   const statusCounts = { pending: 0, approved: 0, rejected: 0 };
+  const planCounts = { Starter: 0, Professional: 0, Enterprise: 0, Trial: 0 };
+
   for (const shop of shopsRes.data ?? []) {
     statusCounts[shop.verification_status as keyof typeof statusCounts]++;
+    
+    const planName = (shop.subscription_plans as any)?.name;
+    if (planName === "Starter" || planName === "Small Pharmacies") {
+      planCounts.Starter++;
+    } else if (planName === "Professional") {
+      planCounts.Professional++;
+    } else if (planName === "Enterprise") {
+      planCounts.Enterprise++;
+    } else {
+      planCounts.Trial++;
+    }
   }
 
   return {
@@ -140,5 +178,13 @@ export async function getAdminDashboardData() {
     platformRevenue,
     shops: shopsRes.data ?? [],
     statusCounts,
+    totalMedicines: medicinesRes.count ?? 0,
+    totalBills: allBillsRes.count ?? 0,
+    planDistribution: [
+      { name: "Small Pharmacies (Starter)", count: planCounts.Starter },
+      { name: "Professional", count: planCounts.Professional },
+      { name: "Enterprise", count: planCounts.Enterprise },
+      { name: "Trial / Unsubscribed", count: planCounts.Trial },
+    ],
   };
 }

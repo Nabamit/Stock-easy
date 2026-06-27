@@ -53,8 +53,28 @@ export async function createDealerAction(input: z.infer<typeof dealerSchema>) {
   const parsed = dealerSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Invalid dealer data" };
 
-  const { shopId } = await getShopContext();
+  const { shopId, session } = await getShopContext();
+  if (!session.shopVerified) {
+    return { success: false, error: "Action blocked. Shop verification is pending." };
+  }
   const db = getDb();
+
+  // Enforce Subscription Limits
+  const { getShopSubscriptionLimit } = await import("@/lib/actions/subscription-limits");
+  const limits = await getShopSubscriptionLimit(shopId);
+
+  const { count } = await db
+    .from("dealers")
+    .select("id", { count: "exact", head: true })
+    .eq("shop_id", shopId)
+    .eq("is_active", true);
+
+  if (count !== null && count >= limits.dealersLimit) {
+    return {
+      success: false,
+      error: `Dealers limit of ${limits.dealersLimit} reached. Please upgrade your subscription plan.`,
+    };
+  }
 
   const { data, error } = await db
     .from("dealers")
@@ -71,4 +91,51 @@ export async function createDealerAction(input: z.infer<typeof dealerSchema>) {
   revalidatePath("/dealers");
   revalidatePath("/stock");
   return { success: true, data };
+}
+
+export async function updateDealerAction(dealerId: string, input: z.infer<typeof dealerSchema>) {
+  const parsed = dealerSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Invalid dealer data" };
+
+  const { shopId, session } = await getShopContext();
+  if (!session.shopVerified) {
+    return { success: false, error: "Action blocked. Shop verification is pending." };
+  }
+  const db = getDb();
+
+  const { error } = await db
+    .from("dealers")
+    .update({
+      ...parsed.data,
+      email: parsed.data.email || null,
+    })
+    .eq("id", dealerId)
+    .eq("shop_id", shopId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/dealers");
+  revalidatePath("/stock");
+  return { success: true };
+}
+
+export async function deleteDealerAction(dealerId: string) {
+  const { shopId, session } = await getShopContext();
+  if (!session.shopVerified) {
+    return { success: false, error: "Action blocked. Shop verification is pending." };
+  }
+  const db = getDb();
+
+  // Soft delete dealer by setting is_active = false
+  const { error } = await db
+    .from("dealers")
+    .update({ is_active: false })
+    .eq("id", dealerId)
+    .eq("shop_id", shopId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/dealers");
+  revalidatePath("/stock");
+  return { success: true };
 }

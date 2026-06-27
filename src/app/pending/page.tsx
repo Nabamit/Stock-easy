@@ -4,10 +4,28 @@ import { logoutAction } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
+import { redirect } from "next/navigation";
+import { getDb } from "@/lib/supabase/server";
+import { createSessionToken, setSessionCookie } from "@/lib/auth/session";
+
 export const metadata = { title: "Verification Pending" };
 
 export default async function PendingPage() {
   const session = await requireSession();
+
+  // Query database to get fresh verification status
+  if (session.shopId) {
+    const db = getDb();
+    const { data: shop } = await db
+      .from("shops")
+      .select("verification_status")
+      .eq("id", session.shopId)
+      .single();
+
+    if (shop?.verification_status === "approved") {
+      redirect("/api/auth/verify-pending");
+    }
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-6">

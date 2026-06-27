@@ -17,6 +17,9 @@ import {
   ShieldCheck,
   Store,
   CreditCard,
+  Users,
+  History,
+  LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
@@ -31,13 +34,14 @@ interface NavItem {
 const shopNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/billing", label: "New Bill", icon: Receipt },
-  { href: "/medicines", label: "Medicines", icon: Pill },
-  { href: "/stock", label: "Stock & Batches", icon: Package },
   { href: "/inventory", label: "Inventory", icon: Warehouse },
+  { href: "/medicines", label: "Medicines", icon: Pill },
   { href: "/dealers", label: "Dealers", icon: Truck },
+  { href: "/stock", label: "Stock & Batches", icon: Package },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai", label: "AI Assistant", icon: Bot },
   { href: "/bills", label: "Bills History", icon: FileText },
+  { href: "/sales", label: "Sales History", icon: History },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -47,6 +51,9 @@ const adminNav: NavItem[] = [
   { href: "/admin/shops", label: "All Shops", icon: Store },
   { href: "/admin/billing", label: "Billing", icon: CreditCard },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/admin/panel", label: "Admin Panel", icon: Users },
+  { href: "/admin/support", label: "Customer Support", icon: LifeBuoy },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -58,7 +65,12 @@ interface SidebarProps {
 export function Sidebar({ session, open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const isAdmin = session.role === "central_admin";
-  const nav = isAdmin ? adminNav : shopNav;
+  const isStaff = session.role === "shop_staff";
+  const nav = isAdmin 
+    ? adminNav 
+    : isStaff
+      ? shopNav.filter((item) => ["/billing", "/inventory", "/ai", "/bills", "/sales"].includes(item.href))
+      : shopNav;
 
   return (
     <>
@@ -91,11 +103,31 @@ export function Sidebar({ session, open, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <div className="border-b px-4 py-3">
-          <p className="truncate text-sm font-medium">{session.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {isAdmin ? "Central Admin" : session.shopName}
-          </p>
+        <div className="border-b px-4 py-3 flex items-center gap-3 bg-muted/10">
+          {!isAdmin ? (
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center border text-sm uppercase">
+              {session.shopPhotoUrl ? (
+                <img src={session.shopPhotoUrl} alt="Logo" className="h-full w-full object-cover" />
+              ) : (
+                (session.shopName ?? "P").charAt(0)
+              )}
+            </div>
+          ) : (
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center border text-sm uppercase">
+              A
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-foreground">{session.name}</p>
+            <p className="truncate text-xs text-muted-foreground" title={isAdmin ? "Central Admin" : isStaff ? `Staff of ${session.shopName}` : session.shopName || ""}>
+              {isAdmin 
+                ? "Central Admin" 
+                : isStaff
+                  ? `Staff of ${session.shopName}`
+                  : session.shopName
+              }
+            </p>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-4">

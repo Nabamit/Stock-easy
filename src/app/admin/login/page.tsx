@@ -20,7 +20,7 @@ export default function AdminLoginPage() {
           subtitle="Platform administration access"
         />
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Test: admin@stockeasy.in / admin123
+          {/* Test: nabamitdutta14@gmail.com / Nabamitdutta@1442002 */}
         </p>
         <p className="mt-4 text-center text-sm">
           <Link href="/" className="text-primary hover:underline">

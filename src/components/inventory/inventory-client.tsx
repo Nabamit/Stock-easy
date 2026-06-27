@@ -9,7 +9,7 @@ import { ExpiryBadge, expiryRowClass } from "@/components/shared/expiry-badge";
 
 type Filter = "all" | "expiring" | "low" | "dead";
 
-export function InventoryClient() {
+export function InventoryClient({ isVerified = true }: { isVerified?: boolean }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [items, setItems] = useState<Awaited<ReturnType<typeof getInventoryOverviewAction>>>([]);
   const [isPending, startTransition] = useTransition();
@@ -66,14 +66,33 @@ export function InventoryClient() {
               <tbody>
                 {items.map((b) => {
                   const med = b.medicines as { name: string; generic_name: string };
+                  // Cast item to access new property flags
+                  const item = b as any;
                   return (
-                    <tr key={b.id} className={`border-b ${expiryRowClass(b.expiry_date)}`}>
+                    <tr key={b.id} className={`border-b ${item.isOutOfStock ? "bg-red-50/20" : b.expiry_date ? expiryRowClass(b.expiry_date) : ""}`}>
                       <td className="px-4 py-3 font-medium">{med?.name}</td>
                       <td className="px-4 py-3 font-mono">{b.batch_no}</td>
-                      <td className="px-4 py-3">{formatDate(b.expiry_date)}</td>
+                      <td className="px-4 py-3">{b.expiry_date ? formatDate(b.expiry_date) : "—"}</td>
                       <td className="px-4 py-3 text-right">{b.quantity_remaining}</td>
-                      <td className="px-4 py-3">{b.daysToExpiry}</td>
-                      <td className="px-4 py-3"><ExpiryBadge expiryDate={b.expiry_date} /></td>
+                      <td className="px-4 py-3">{b.daysToExpiry !== null ? b.daysToExpiry : "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {item.isOutOfStock ? (
+                            <span className="rounded-full border px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 border-red-200">
+                              Out of Stock
+                            </span>
+                          ) : (
+                            <>
+                              {item.isLowStock && (
+                                <span className="rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 border-amber-200">
+                                  Low Stock
+                                </span>
+                              )}
+                              {b.expiry_date && <ExpiryBadge expiryDate={b.expiry_date} />}
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}

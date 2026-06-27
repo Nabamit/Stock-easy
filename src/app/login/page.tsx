@@ -24,7 +24,7 @@ export default function LoginPage() {
           </p>
         </div>
         <p className="text-sm text-white/60">
-          Test account: owner1@test.com / owner123
+          {/* Test account: nabamitcc9@gmail.com / Nabamit@14 */}
         </p>
       </div>
 
