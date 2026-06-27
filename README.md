@@ -16,6 +16,46 @@ StockEasy is built on a robust, scalable, and responsive architecture:
 
 ---
 
+## 📂 Project Structure
+
+```text
+stock-easy/
+├── supabase/                 # Supabase configuration & database migrations
+│   └── migrations/           # SQL migration files (tables, triggers, policies)
+├── src/
+│   ├── app/                  # Next.js App Router route segments
+│   │   ├── (admin)/          # Group route for platform admin features
+│   │   │   └── admin/        # Sub-routes (/admin/dashboard, /admin/support, etc.)
+│   │   ├── (shop)/           # Group route for pharmacy dashboard & workflows
+│   │   │   ├── dashboard/    # Shop overview
+│   │   │   ├── billing/      # POS Billing terminal
+│   │   │   ├── inventory/    # Medicine stock list
+│   │   │   └── ...           # Settings, analytics, history logs
+│   │   ├── api/              # Route endpoints (authentication, uploads)
+│   │   ├── login/            # Shop owner & staff login page
+│   │   ├── register/         # New shop onboarding request form
+│   │   └── page.tsx          # Public marketing & landing page
+│   ├── components/           # React client components grouped by feature
+│   │   ├── admin/            # Admin analytics, shops dashboard, support chat
+│   │   ├── auth/             # Login and register forms
+│   │   ├── billing/          # GST invoice builder & print terminal
+│   │   ├── layout/           # Sidebar, navbar, & Notification Bell components
+│   │   ├── ui/               # Reusable UI controls (Buttons, Cards, Badges)
+│   │   └── ...               # Analytics, AI chat, stock forms
+│   ├── lib/                  # Helper utilities, constants, & backend logic
+│   │   ├── actions/          # Next.js Server Actions (AI, Analytics, Support, POS)
+│   │   ├── admin/            # Administrative verification and email actions
+│   │   ├── auth/             # Auth encryption, roles check, & sessions helper
+│   │   ├── supabase/         # Supabase connection init (server/client)
+│   │   ├── constants.ts      # Global configurations & routing pathways
+│   │   ├── mail.ts           # SMTP transporter & Nodemailer helper
+│   │   └── utils.ts          # Invoice formatters & CSS class merger
+│   ├── types/                # Typescript type definitions
+│   └── proxy.ts              # Next.js 16 Edge proxy (replaces middleware.ts)
+```
+
+---
+
 ## 🔑 User Roles & Detailed Features
 
 ### A. Pharmacy Shop Owners (Shoppers)
