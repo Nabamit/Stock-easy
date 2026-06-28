@@ -45,7 +45,7 @@ export function PlatformAnalyticsClient() {
   return (
     <div className="space-y-6">
       {/* 6-Card KPI Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard
           title="Total Shops"
           value={data.totalShops}
