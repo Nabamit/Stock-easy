@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  createBatchAction, 
+import {
+  createBatchAction,
   getBatchesAction,
   updateBatchAction,
   deleteBatchAction,
@@ -138,15 +138,15 @@ export function StockClient({ isVerified = true }: { isVerified?: boolean }) {
   function parseCSV(text: string) {
     const lines = text.split(/\r\n|\n/);
     if (lines.length === 0) return [];
-    
+
     // Parse headers, trim spaces and strip outer quotes
     const headers = lines[0].split(",").map(h => h.trim().replace(/^["']|["']$/g, ""));
-    
+
     const results = [];
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-      
+
       const fields: string[] = [];
       let currentField = "";
       let insideQuotes = false;
@@ -162,7 +162,7 @@ export function StockClient({ isVerified = true }: { isVerified?: boolean }) {
         }
       }
       fields.push(currentField.trim());
-      
+
       const row: any = {};
       headers.forEach((header, idx) => {
         row[header] = fields[idx] || "";
@@ -211,10 +211,10 @@ export function StockClient({ isVerified = true }: { isVerified?: boolean }) {
         <div>
           <Label className="text-xs font-semibold text-muted-foreground">Bulk CSV Import</Label>
           <div className="flex items-center gap-2 mt-1">
-            <Input 
-              type="file" 
-              accept=".csv" 
-              onChange={handleCSVImport} 
+            <Input
+              type="file"
+              accept=".csv"
+              onChange={handleCSVImport}
               className="max-w-[240px] text-xs h-9 cursor-pointer"
               disabled={isPending || !isVerified}
             />
@@ -223,8 +223,8 @@ export function StockClient({ isVerified = true }: { isVerified?: boolean }) {
             </Button>
           </div>
         </div>
-        <Button 
-          onClick={() => isVerified && setShowForm(!showForm)} 
+        <Button
+          onClick={() => isVerified && setShowForm(!showForm)}
           disabled={!isVerified}
           className={!isVerified ? "opacity-75 cursor-not-allowed" : ""}
         >

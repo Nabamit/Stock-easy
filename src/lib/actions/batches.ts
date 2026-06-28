@@ -288,10 +288,41 @@ export async function bulkImportBatchesAction(rows: any[]) {
         .eq("shop_id", shopId)
         .eq("is_active", true);
 
+      // Resolve or create discount cluster if provided
+      let clusterId: string | null = null;
+      if (clusterName) {
+        const { data: cluster } = await db
+          .from("discount_clusters")
+          .select("id")
+          .eq("shop_id", shopId)
+          .eq("name", clusterName)
+          .maybeSingle();
+
+        if (cluster) {
+          clusterId = cluster.id;
+        } else {
+          // Auto-create discount cluster if it does not exist
+          const { data: newCluster, error: clusterErr } = await db
+            .from("discount_clusters")
+            .insert({
+              shop_id: shopId,
+              name: clusterName,
+              discount_percent: 0.0,
+              description: `Auto-created during bulk stock import`,
+            })
+            .select("id")
+            .single();
+
+          if (!clusterErr && newCluster) {
+            clusterId = newCluster.id;
+          }
+        }
+      }
+
       // Find or create medicine
       let { data: med } = await db
         .from("medicines")
-        .select("id")
+        .select("id, discount_cluster_id")
         .eq("shop_id", shopId)
         .eq("name", medName)
         .maybeSingle();
@@ -300,18 +331,6 @@ export async function bulkImportBatchesAction(rows: any[]) {
         if (medCount !== null && medCount >= limits.medicineSkuLimit) {
           errorCount++;
           continue; // skip due to subscription limit
-        }
-
-        // Find discount cluster if name provided
-        let clusterId: string | null = null;
-        if (clusterName) {
-          const { data: cluster } = await db
-            .from("discount_clusters")
-            .select("id")
-            .eq("shop_id", shopId)
-            .eq("name", clusterName)
-            .maybeSingle();
-          if (cluster) clusterId = cluster.id;
         }
 
         const { data: newMed, error: medErr } = await db
@@ -328,7 +347,7 @@ export async function bulkImportBatchesAction(rows: any[]) {
             gst_rate: 5.0,
             min_stock_level: 10,
           })
-          .select("id")
+          .select("id, discount_cluster_id")
           .single();
 
         if (medErr || !newMed) {
@@ -336,6 +355,19 @@ export async function bulkImportBatchesAction(rows: any[]) {
           continue;
         }
         med = newMed;
+      } else {
+        // If medicine already exists, update its discount cluster link if specified
+        if (clusterId && med.discount_cluster_id !== clusterId) {
+          await db
+            .from("medicines")
+            .update({ discount_cluster_id: clusterId })
+            .eq("id", med.id);
+        }
+      }
+
+      if (!med) {
+        errorCount++;
+        continue;
       }
 
       // Find or create dealer
