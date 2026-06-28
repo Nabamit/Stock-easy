@@ -68,17 +68,21 @@ export async function buildSession(userId: string): Promise<SessionPayload | nul
   let shopName: string | null = null;
   let shopPhotoUrl: string | null = null;
   let ownerName: string | null = null;
+  let subscriptionStatus: "trial" | "active" | "expired" | "cancelled" | null = null;
+  let isSuspended = false;
 
   if (user.shop_id) {
     const { data: shop } = await db
       .from("shops")
-      .select("name, verification_status, shop_photo_url, owner_name")
+      .select("name, verification_status, shop_photo_url, owner_name, subscription_status, is_suspended")
       .eq("id", user.shop_id)
       .single();
 
     if (shop) {
       shopName = shop.name;
       shopVerified = shop.verification_status === "approved";
+      subscriptionStatus = shop.subscription_status as any;
+      isSuspended = !!shop.is_suspended;
       // Avoid inserting massive base64 image strings into the session cookie (browser limit 4KB)
       shopPhotoUrl = (shop.shop_photo_url && !shop.shop_photo_url.startsWith("data:"))
         ? shop.shop_photo_url
@@ -97,6 +101,8 @@ export async function buildSession(userId: string): Promise<SessionPayload | nul
     shopName,
     shopPhotoUrl,
     ownerName,
+    subscriptionStatus,
+    isSuspended,
   };
 }
 
@@ -433,16 +439,44 @@ export async function requireVerifiedShopSession(): Promise<SessionPayload> {
     const db = getDb();
     const { data: shop } = await db
       .from("shops")
-      .select("verification_status")
+      .select("verification_status, subscription_status, subscription_expires_at, auto_renew, is_suspended")
       .eq("id", session.shopId)
       .single();
 
-    session.shopVerified = shop?.verification_status === "approved";
+    if (shop) {
+      let currentStatus = shop.subscription_status;
+      const expiresAt = shop.subscription_expires_at ? new Date(shop.subscription_expires_at) : null;
+      
+      // If subscription is active but expired
+      if (currentStatus === "active" && expiresAt && expiresAt.getTime() < Date.now()) {
+        if (!shop.auto_renew) {
+          // Downgrade to trial status (Sandbox Trial Mode)
+          currentStatus = "trial";
+          await db
+            .from("shops")
+            .update({ subscription_status: "trial" })
+            .eq("id", session.shopId);
+        } else {
+          // Auto-renew: extend by 1 month for simulation
+          const newExpiry = new Date();
+          newExpiry.setMonth(newExpiry.getMonth() + 1);
+          await db
+            .from("shops")
+            .update({ subscription_expires_at: newExpiry.toISOString() })
+            .eq("id", session.shopId);
+        }
+      }
+
+      session.shopVerified = shop.verification_status === "approved";
+      session.subscriptionStatus = currentStatus as any;
+      session.isSuspended = !!shop.is_suspended;
+    }
   }
 
-  if (!session.shopVerified) {
-    redirect(ROUTES.shopPending);
-  }
+  // Allow browsing in Trial Mode when verification is pending rather than blocking
+  // if (!session.shopVerified) {
+  //   redirect(ROUTES.shopPending);
+  // }
 
   return session;
 }

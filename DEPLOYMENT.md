@@ -21,6 +21,11 @@ StockEasy is built on a modern **Next.js 14** stack utilizing Server Actions. Be
    - Run `supabase/migrations/001_initial_schema.sql` (Creates base schemas)
    - Run `supabase/migrations/002_features.sql` (Adds analytical columns and indices)
    - Run `supabase/migrations/003_admin_subroles_maintenance.sql` (Adds Super Admin flag, maintenance toggles, admin tasks, and chat tables)
+   - Run `supabase/migrations/004_add_doctor_name_to_bills.sql` (Adds doctor name column to bills table)
+   - Run `supabase/migrations/005_platform_notifications.sql` (Creates platform notifications and read-tracking tables)
+   - Run `supabase/migrations/006_customer_support.sql` (Creates support tickets and message log tables)
+   - Run `supabase/migrations/007_create_storage_bucket.sql` (Creates pharmacy-documents storage bucket and RLS policies)
+   - Run `supabase/migrations/008_suspend_pharmacies.sql` (Adds is_suspended column to shops table to track admin suspensions)
 3. **Copy Credentials**: In your Supabase project dashboard, navigate to **Project Settings → API** and copy:
    - **Project URL**
    - **Anon Public API Key** (`anon`)
@@ -73,6 +78,12 @@ git push -u origin main
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`| Firebase Storage Bucket URL |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`| Firebase Cloud Messaging sender ID |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase Web App ID |
+| `SMTP_HOST` | SMTP server host (e.g. `smtp.gmail.com`) for notifications and broadcasts |
+| `SMTP_PORT` | SMTP server port (e.g. `587` or `465`) |
+| `SMTP_USER` | SMTP username or email address |
+| `SMTP_PASS` | SMTP password (or App Password if using Gmail) |
+| `SMTP_SECURE` | Set to `true` if port is `465` (SSL), else `false` (TLS) |
+| `SMTP_FROM` | The sender address header, e.g. `"StockEasy" <noreply@stockeasy.in>` |
 
 5. Click **Deploy**. Vercel will build and distribute your static pages and Edge-ready Server Actions globally.
 
@@ -99,3 +110,9 @@ After successful deployment, test the following key paths:
 3. **Platform Admin Dashboard**: Sign in with `nabamitdutta14@gmail.com` / `Nabamitdutta@1442002`. Verify access to Super Admin settings, maintenance toggle, onboarding leaderboards, and direct support chat.
 4. **Maintenance Redirection**: Toggle maintenance mode in the Admin settings, and verify that normal shop users are locked out and redirected to `/maintenance`.
 5. **AI Assistant**: Navigate to `/ai` and ask: *"Which medicines are expiring soon?"* to test Gemini API integration.
+6. **Support Tickets**:
+   - As a **Shop Owner**, navigate to settings, open a support ticket (e.g., category: `billing`), send a message, and check the ticket status.
+   - As a **Platform Admin**, navigate to `/admin/support`, select the active ticket, reply to the user, and close the ticket.
+7. **Platform Announcements & Notifications**:
+   - As a **Platform Admin**, use the admin dashboard (`/admin/dashboard`) to publish a platform-wide notification or custom user announcement.
+   - As a **Shop Owner** or user, check the notification tray or indicator to ensure the message was received and can be marked as read.

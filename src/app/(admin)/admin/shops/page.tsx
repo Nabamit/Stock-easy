@@ -24,10 +24,10 @@ export default async function AdminShopsPage() {
     .eq("is_active", true)
     .order("price");
 
-  // Fetch shops with is_active and subscription_plan_id
+  // Fetch shops with is_active, subscription_plan_id, and is_suspended status
   const { data: shops } = await db
     .from("shops")
-    .select("id, name, owner_name, city, state, phone, verification_status, subscription_status, subscription_plan_id, subscription_plans(name, price), is_active, created_at")
+    .select("id, name, owner_name, city, state, phone, verification_status, subscription_status, subscription_plan_id, subscription_plans(name, price), is_active, created_at, is_suspended")
     .order("created_at", { ascending: false });
 
   return (

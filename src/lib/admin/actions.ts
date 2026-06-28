@@ -534,3 +534,43 @@ export async function broadcastPlatformEmailAction(
     message: `Broadcast complete. Sent ${successCount} emails successfully, ${failCount} failed.`,
   };
 }
+
+export async function toggleShopSuspensionAction(shopId: string, suspend: boolean) {
+  const session = await requireAdminSession();
+  const db = getDb();
+
+  const { error } = await db
+    .from("shops")
+    .update({
+      is_suspended: suspend,
+    })
+    .eq("id", shopId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  // Get owner details to send email notification
+  const { data: shop } = await db.from("shops").select("name, owner_name").eq("id", shopId).single();
+  const { data: owner } = await db.from("users").select("email").eq("shop_id", shopId).eq("role", "shop_owner").maybeSingle();
+  const ownerEmail = owner?.email || "owner@stockeasy.in";
+
+  const { sendEmail } = await import("@/lib/mail");
+  if (suspend) {
+    await sendEmail({
+      to: ownerEmail,
+      subject: "Account Suspended - StockEasy",
+      body: `Dear ${shop?.owner_name || "Owner"},\n\nWe regret to inform you that your shop account "${shop?.name || "Shop"}" has been suspended by the administrator because it violated our terms and conditions.\n\nAll features are locked. Only Customer Support remains available.\n\nRegards,\nStockEasy Admin Team`,
+    });
+  } else {
+    await sendEmail({
+      to: ownerEmail,
+      subject: "Account Suspension Revoked - StockEasy",
+      body: `Dear ${shop?.owner_name || "Owner"},\n\nWe are pleased to inform you that the suspension on your shop account "${shop?.name || "Shop"}" has been revoked. You now have full access to your account and subscription tier.\n\nRegards,\nStockEasy Admin Team`,
+    });
+  }
+
+  revalidatePath("/admin/shops");
+  revalidatePath("/admin/dashboard");
+  return { success: true };
+}

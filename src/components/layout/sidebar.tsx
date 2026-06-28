@@ -66,11 +66,15 @@ export function Sidebar({ session, open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const isAdmin = session.role === "central_admin";
   const isStaff = session.role === "shop_staff";
+  const isSuspended = !!(session as any).isSuspended;
+
   const nav = isAdmin 
     ? adminNav 
-    : isStaff
-      ? shopNav.filter((item) => ["/billing", "/inventory", "/ai", "/bills", "/sales"].includes(item.href))
-      : shopNav;
+    : isSuspended
+      ? shopNav.filter((item) => item.href === "/settings")
+      : isStaff
+        ? shopNav.filter((item) => ["/billing", "/inventory", "/ai", "/bills", "/sales"].includes(item.href))
+        : shopNav;
 
   return (
     <>

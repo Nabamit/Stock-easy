@@ -27,6 +27,8 @@ export default async function ShopDashboardPage() {
   const { kpis, salesTrend, expiryDistribution, recentBills } =
     await getShopDashboardData(session.shopId!);
 
+  const isTrialMode = !session.shopVerified || session.subscriptionStatus === "trial";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -35,25 +37,16 @@ export default async function ShopDashboardPage() {
           <p className="text-muted-foreground">{session.shopName}</p>
         </div>
         <div className="flex gap-2">
-          {session.shopVerified ? (
-            <>
-              <Link href="/billing">
-                <Button className="gap-2"><Plus className="h-4 w-4" /> New Bill</Button>
-              </Link>
-              <Link href="/stock">
-                <Button variant="outline" className="gap-2"><Package className="h-4 w-4" /> Add Stock</Button>
-              </Link>
-            </>
-          ) : (
-            <>
-              <Button disabled className="gap-2 opacity-60 cursor-not-allowed">
-                <Lock className="h-4 w-4" /> New Bill (Locked)
-              </Button>
-              <Button disabled variant="outline" className="gap-2 opacity-60 cursor-not-allowed">
-                <Lock className="h-4 w-4" /> Add Stock (Locked)
-              </Button>
-            </>
-          )}
+          <Link href="/billing">
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" /> New Bill {isTrialMode && <span className="text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded font-normal">Trial</span>}
+            </Button>
+          </Link>
+          <Link href="/stock">
+            <Button variant="outline" className="gap-2">
+              <Package className="h-4 w-4" /> Add Stock {isTrialMode && <span className="text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded font-normal">Trial</span>}
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -99,8 +92,8 @@ export default async function ShopDashboardPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <SalesChart data={salesTrend.length > 0 ? salesTrend : [{ date: "N/A", sales: 0 }]} title="7-Day Sales" />
-        <ExpiryChart data={expiryDistribution} />
+        <SalesChart data={salesTrend.length > 0 ? salesTrend : [{ date: "N/A", sales: 0 }]} title="7-Day Sales" isLocked={isTrialMode} />
+        <ExpiryChart data={expiryDistribution} isLocked={isTrialMode} />
       </div>
 
       <Card>

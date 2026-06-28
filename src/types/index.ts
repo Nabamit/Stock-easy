@@ -140,6 +140,8 @@ export interface SessionPayload {
   shopName: string | null;
   shopPhotoUrl?: string | null;
   ownerName?: string | null;
+  subscriptionStatus?: SubscriptionStatus | null;
+  isSuspended?: boolean;
 }
 
 export interface DashboardKPIs {

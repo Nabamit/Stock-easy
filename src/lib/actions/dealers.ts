@@ -54,26 +54,40 @@ export async function createDealerAction(input: z.infer<typeof dealerSchema>) {
   if (!parsed.success) return { success: false, error: "Invalid dealer data" };
 
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
-  // Enforce Subscription Limits
-  const { getShopSubscriptionLimit } = await import("@/lib/actions/subscription-limits");
-  const limits = await getShopSubscriptionLimit(shopId);
+  const isTrial = !session.shopVerified || (session as any).subscriptionStatus === "trial";
 
-  const { count } = await db
-    .from("dealers")
-    .select("id", { count: "exact", head: true })
-    .eq("shop_id", shopId)
-    .eq("is_active", true);
+  if (isTrial) {
+    const { count } = await db
+      .from("dealers")
+      .select("id", { count: "exact", head: true })
+      .eq("shop_id", shopId)
+      .eq("is_active", true);
 
-  if (count !== null && count >= limits.dealersLimit) {
-    return {
-      success: false,
-      error: `Dealers limit of ${limits.dealersLimit} reached. Please upgrade your subscription plan.`,
-    };
+    if (count !== null && count >= 1) {
+      return {
+        success: false,
+        error: "Trial Mode Limit Reached: 1 dealer max. Please upgrade/renew your subscription or wait for verification approval.",
+      };
+    }
+  } else {
+    // Enforce Subscription Limits
+    const { getShopSubscriptionLimit } = await import("@/lib/actions/subscription-limits");
+    const limits = await getShopSubscriptionLimit(shopId);
+
+    const { count } = await db
+      .from("dealers")
+      .select("id", { count: "exact", head: true })
+      .eq("shop_id", shopId)
+      .eq("is_active", true);
+
+    if (count !== null && count >= limits.dealersLimit) {
+      return {
+        success: false,
+        error: `Dealers limit of ${limits.dealersLimit} reached. Please upgrade your subscription plan.`,
+      };
+    }
   }
 
   const { data, error } = await db
@@ -98,9 +112,6 @@ export async function updateDealerAction(dealerId: string, input: z.infer<typeof
   if (!parsed.success) return { success: false, error: "Invalid dealer data" };
 
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
   const { error } = await db
@@ -121,9 +132,6 @@ export async function updateDealerAction(dealerId: string, input: z.infer<typeof
 
 export async function deleteDealerAction(dealerId: string) {
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
   // Soft delete dealer by setting is_active = false

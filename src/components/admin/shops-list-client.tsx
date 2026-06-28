@@ -8,7 +8,8 @@ import { formatDate } from "@/lib/utils";
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Search, Filter, Edit2, Trash2, Loader2, Calendar } from "lucide-react";
+import { Search, Filter, Edit2, Trash2, Loader2, Calendar, Ban, ShieldCheck } from "lucide-react";
+import { toggleShopSuspensionAction } from "@/lib/admin/actions";
 import { toast } from "sonner";
 
 interface ShopsListClientProps {
@@ -27,6 +28,7 @@ export function ShopsListClient({ shops, plans, isSuper }: ShopsListClientProps)
   const [dateTo, setDateTo] = useState("");
 
   const [editingShop, setEditingShop] = useState<any | null>(null);
+  const [confirmBlockId, setConfirmBlockId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     name: "",
     ownerName: "",
@@ -133,6 +135,18 @@ export function ShopsListClient({ shops, plans, isSuper }: ShopsListClientProps)
         toast.success(`Pharmacy "${shopName}" deleted successfully`);
       } else {
         toast.error(res.error || "Failed to delete shop");
+      }
+    });
+  };
+
+  const handleToggleSuspension = (shopId: string, isCurrentlySuspended: boolean) => {
+    startTransition(async () => {
+      const res = await toggleShopSuspensionAction(shopId, !isCurrentlySuspended);
+      if (res.success) {
+        toast.success(isCurrentlySuspended ? "Suspension revoked successfully!" : "Shop suspended successfully!");
+        setConfirmBlockId(null);
+      } else {
+        toast.error(res.error || "Failed to update suspension status");
       }
     });
   };
@@ -267,9 +281,16 @@ export function ShopsListClient({ shops, plans, isSuper }: ShopsListClientProps)
                       </td>
                       <td className="px-4 py-3 font-medium text-primary">{plan?.name ?? "Trial/None"}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={shop.is_active ? "success" : "secondary"}>
-                          {shop.is_active ? "ACTIVE" : "DEACTIVATED"}
-                        </Badge>
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge variant={shop.is_active ? "success" : "secondary"}>
+                            {shop.is_active ? "ACTIVE" : "DEACTIVATED"}
+                          </Badge>
+                          {shop.is_suspended && (
+                            <Badge variant="destructive" className="text-[10px] font-bold">
+                              SUSPENDED
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <Badge
@@ -307,6 +328,42 @@ export function ShopsListClient({ shops, plans, isSuper }: ShopsListClientProps)
                       {isSuper && (
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {shop.is_suspended ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleSuspension(shop.id, true)}
+                                className="h-7 px-2 text-emerald-600 hover:bg-emerald-50 dark:text-emerald-500 dark:hover:bg-emerald-950/20"
+                                title="Revoke Suspension"
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant={confirmBlockId === shop.id ? "destructive" : "ghost"}
+                                size="sm"
+                                onClick={() => {
+                                  if (confirmBlockId === shop.id) {
+                                    handleToggleSuspension(shop.id, false);
+                                  } else {
+                                    setConfirmBlockId(shop.id);
+                                    // Reset confirmation state after 4 seconds
+                                    setTimeout(() => setConfirmBlockId((prev) => prev === shop.id ? null : prev), 4000);
+                                  }
+                                }}
+                                className={`h-7 px-2 ${
+                                  confirmBlockId === shop.id 
+                                    ? "animate-pulse font-semibold" 
+                                    : "text-amber-600 hover:bg-amber-50 dark:text-amber-500 dark:hover:bg-amber-950/20"
+                                }`}
+                                title={confirmBlockId === shop.id ? "Click again to confirm block" : "Suspend Shop"}
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                                {confirmBlockId === shop.id && (
+                                  <span className="text-[10px] ml-1">Re-Verify</span>
+                                )}
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"

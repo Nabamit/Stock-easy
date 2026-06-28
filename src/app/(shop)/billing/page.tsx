@@ -12,7 +12,10 @@ export default async function BillingPage() {
         <h2 className="text-2xl font-bold">FEFO Billing</h2>
         <p className="text-muted-foreground">Nearest expiry batches are highlighted automatically</p>
       </div>
-      <BillingClient shopName={session.shopName ?? "Pharmacy"} isVerified={session.shopVerified} />
+      <BillingClient 
+        shopName={session.shopName ?? "Pharmacy"} 
+        isVerified={session.shopVerified && session.subscriptionStatus !== "trial"} 
+      />
     </div>
   );
 }

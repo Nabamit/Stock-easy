@@ -8,9 +8,22 @@ interface VerificationBannerProps {
 }
 
 export function VerificationBanner({ session }: VerificationBannerProps) {
-  if (session.role === "central_admin" || session.shopVerified) {
+  if (session.role === "central_admin") {
     return null;
   }
+
+  const isPendingVerification = !session.shopVerified;
+  const isTrialSubscription = session.subscriptionStatus === "trial";
+
+  if (!isPendingVerification && !isTrialSubscription) {
+    return null;
+  }
+
+  const title = isPendingVerification ? "Sandbox Trial Mode" : "Subscription Expired";
+  const badge = isPendingVerification ? "Verification Pending" : "Trial Fallback";
+  const message = isPendingVerification
+    ? `Explore StockEasy in trial mode (KPIs, cart, and limited stock additions). Billing checkout, advanced analytics, and AI assistant are locked.`
+    : `Your subscription has expired and fell back to the Trial Plan. Billing, advanced analytics, and AI assistant are locked.`;
 
   return (
     <div className="relative overflow-hidden border-b border-amber-200 bg-gradient-to-r from-amber-50/90 via-amber-100/70 to-amber-50/90 px-4 py-4 dark:border-amber-950 dark:from-amber-950/20 dark:via-amber-900/10 dark:to-amber-950/20 sm:px-6 shadow-inner">
@@ -26,14 +39,14 @@ export function VerificationBanner({ session }: VerificationBannerProps) {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-amber-800 dark:text-amber-300 text-sm uppercase tracking-wider">
-                  Verification Pending
+                  {title}
                 </h3>
                 <span className="inline-flex items-center rounded-full bg-amber-200/60 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-300">
-                  Under Review
+                  {badge}
                 </span>
               </div>
               <p className="text-sm font-medium text-amber-700 dark:text-amber-400 mt-1">
-                Hi <strong className="font-bold text-amber-900 dark:text-amber-200">{session.name}</strong>, your shop <strong className="font-bold text-amber-900 dark:text-amber-200">{session.shopName}</strong> is under review by our central team.
+                Hi <strong className="font-bold text-amber-900 dark:text-amber-200">{session.name}</strong>! {message}
               </p>
             </div>
           </div>
@@ -42,16 +55,16 @@ export function VerificationBanner({ session }: VerificationBannerProps) {
             <div className="flex items-center gap-2">
               <Mail className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>
-                We&apos;ll notify you at{" "}
-                <strong className="font-semibold text-amber-900 dark:text-amber-200 underline decoration-amber-400/50 underline-offset-2">
-                  {session.email}
-                </strong>{" "}
-                once approved.
+                {isPendingVerification ? (
+                  <>We&apos;ll notify <strong className="font-semibold text-amber-900 dark:text-amber-200 underline decoration-amber-400/50 underline-offset-2">{session.email}</strong> once approved.</>
+                ) : (
+                  <>Renew/Upgrade in <strong className="font-semibold text-amber-900 dark:text-amber-200">Settings &rarr; Subscription</strong>.</>
+                )}
               </span>
             </div>
             <div className="flex items-center gap-1.5 font-medium text-amber-850 dark:text-amber-300">
               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-              <span>This usually takes 24–48 hours. Please ensure all documents are valid.</span>
+              <span>Limits: 5 medicines, 1 dealer, 5 batches max.</span>
             </div>
           </div>
         </div>

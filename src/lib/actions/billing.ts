@@ -36,8 +36,9 @@ export async function createBillAction(input: z.infer<typeof createBillSchema>) 
   if (!parsed.success) return { success: false, error: "Invalid bill data" };
 
   const { shopId, userId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
+  const isTrial = !session.shopVerified || (session as any).subscriptionStatus === "trial";
+  if (isTrial) {
+    return { success: false, error: "Action blocked. Billing is locked in Trial Mode. Please upgrade/renew your subscription or wait for Admin verification to activate." };
   }
   const db = getDb();
 

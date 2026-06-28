@@ -87,26 +87,40 @@ export async function createMedicineAction(input: z.infer<typeof medicineSchema>
   if (!parsed.success) return { success: false, error: "Invalid medicine data" };
 
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
-  // Enforce Subscription Limits
-  const { getShopSubscriptionLimit } = await import("@/lib/actions/subscription-limits");
-  const limits = await getShopSubscriptionLimit(shopId);
+  const isTrial = !session.shopVerified || (session as any).subscriptionStatus === "trial";
 
-  const { count } = await db
-    .from("medicines")
-    .select("id", { count: "exact", head: true })
-    .eq("shop_id", shopId)
-    .eq("is_active", true);
+  if (isTrial) {
+    const { count } = await db
+      .from("medicines")
+      .select("id", { count: "exact", head: true })
+      .eq("shop_id", shopId)
+      .eq("is_active", true);
 
-  if (count !== null && count >= limits.medicineSkuLimit) {
-    return {
-      success: false,
-      error: `Medicine SKU limit of ${limits.medicineSkuLimit} types reached. Please upgrade your subscription plan.`,
-    };
+    if (count !== null && count >= 5) {
+      return {
+        success: false,
+        error: "Trial Mode Limit Reached: 5 medicines max. Please upgrade/renew your subscription or wait for verification approval.",
+      };
+    }
+  } else {
+    // Enforce Subscription Limits
+    const { getShopSubscriptionLimit } = await import("@/lib/actions/subscription-limits");
+    const limits = await getShopSubscriptionLimit(shopId);
+
+    const { count } = await db
+      .from("medicines")
+      .select("id", { count: "exact", head: true })
+      .eq("shop_id", shopId)
+      .eq("is_active", true);
+
+    if (count !== null && count >= limits.medicineSkuLimit) {
+      return {
+        success: false,
+        error: `Medicine SKU limit of ${limits.medicineSkuLimit} types reached. Please upgrade your subscription plan.`,
+      };
+    }
   }
 
   const { data, error } = await db
@@ -127,9 +141,6 @@ export async function updateMedicineAction(medicineId: string, input: z.infer<ty
   if (!parsed.success) return { success: false, error: "Invalid medicine data" };
 
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
   const { error } = await db
@@ -147,9 +158,6 @@ export async function updateMedicineAction(medicineId: string, input: z.infer<ty
 
 export async function deleteMedicineAction(medicineId: string) {
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
   // Soft delete by setting is_active = false

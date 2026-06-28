@@ -12,7 +12,11 @@ export default async function SettingsPage() {
         <h2 className="text-2xl font-bold">Settings & Profile</h2>
         <p className="text-muted-foreground">Shop profile, staff, password, and subscription</p>
       </div>
-      <SettingsClient isVerified={session.shopVerified} />
+      <SettingsClient 
+        isVerified={session.shopVerified} 
+        subscriptionStatus={session.subscriptionStatus} 
+        isSuspended={session.isSuspended} 
+      />
     </div>
   );
 }

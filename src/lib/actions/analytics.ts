@@ -219,7 +219,7 @@ export async function getShopAnalyticsAction(daysFilter: 7 | 30 | 60 | 90 = 30) 
     hourlySalesData,
     daysFilter,
     limits,
-    shopVerified: session.shopVerified,
+    shopVerified: session.shopVerified && (session as any).subscriptionStatus !== "trial",
   };
 }
 

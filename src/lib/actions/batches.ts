@@ -47,38 +47,51 @@ export async function createBatchAction(input: z.infer<typeof batchSchema>) {
   if (!parsed.success) return { success: false, error: "Invalid batch data" };
 
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
-  // Enforce Subscription Limits
-  const { getShopSubscriptionLimit } = await import("@/lib/actions/subscription-limits");
-  const limits = await getShopSubscriptionLimit(shopId);
+  const isTrial = !session.shopVerified || (session as any).subscriptionStatus === "trial";
 
-  // Count batches added this month
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-
-  const { count } = await db
-    .from("batches")
-    .select("id", { count: "exact", head: true })
-    .eq("shop_id", shopId)
-    .gte("created_at", startOfMonth.toISOString());
-
-  if (count !== null && count >= limits.monthlyStockEntriesLimit) {
-    // FIFO: drop oldest batch
-    const { data: oldestBatch } = await db
+  if (isTrial) {
+    const { count: totalBatches } = await db
       .from("batches")
-      .select("id")
-      .eq("shop_id", shopId)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .single();
+      .select("id", { count: "exact", head: true })
+      .eq("shop_id", shopId);
 
-    if (oldestBatch) {
-      await db.from("batches").delete().eq("id", oldestBatch.id);
+    if (totalBatches !== null && totalBatches >= 5) {
+      return {
+        success: false,
+        error: "Trial Mode Limit Reached: 5 batches max. Please upgrade/renew your subscription or wait for verification approval.",
+      };
+    }
+  } else {
+    // Enforce Subscription Limits
+    const { getShopSubscriptionLimit } = await import("@/lib/actions/subscription-limits");
+    const limits = await getShopSubscriptionLimit(shopId);
+
+    // Count batches added this month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { count } = await db
+      .from("batches")
+      .select("id", { count: "exact", head: true })
+      .eq("shop_id", shopId)
+      .gte("created_at", startOfMonth.toISOString());
+
+    if (count !== null && count >= limits.monthlyStockEntriesLimit) {
+      // FIFO: drop oldest batch
+      const { data: oldestBatch } = await db
+        .from("batches")
+        .select("id")
+        .eq("shop_id", shopId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .single();
+
+      if (oldestBatch) {
+        await db.from("batches").delete().eq("id", oldestBatch.id);
+      }
     }
   }
 
@@ -105,9 +118,6 @@ export async function updateBatchAction(batchId: string, input: z.infer<typeof u
   if (!parsed.success) return { success: false, error: "Invalid batch data" };
 
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
   const { error } = await db
@@ -129,9 +139,6 @@ export async function updateBatchAction(batchId: string, input: z.infer<typeof u
 
 export async function deleteBatchAction(batchId: string) {
   const { shopId, session } = await getShopContext();
-  if (!session.shopVerified) {
-    return { success: false, error: "Action blocked. Shop verification is pending." };
-  }
   const db = getDb();
 
   const { error } = await db

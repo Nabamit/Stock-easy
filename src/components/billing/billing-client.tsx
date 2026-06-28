@@ -180,24 +180,7 @@ export function BillingClient({ shopName, isVerified = true }: { shopName: strin
 
   return (
     <div className="space-y-6 relative min-h-[400px]">
-      {!isVerified && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center p-6 bg-background/50 backdrop-blur-md rounded-2xl border border-dashed border-muted-foreground/30">
-          <Card className="max-w-md w-full text-center p-6 shadow-2xl border border-primary/20 bg-card/95 relative overflow-hidden">
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl" />
-            <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary">
-              <Lock className="h-6 w-6" />
-            </div>
-            <CardTitle className="text-xl font-bold mb-2">Verification Pending</CardTitle>
-            <p className="text-sm text-muted-foreground mb-6">
-              Billing and invoice generation are locked. Once your shop is verified and approved by our central admin team, you will be able to search medicines and generate bills.
-            </p>
-            <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg border border-amber-200/50">
-              Verification usually takes 24–48 hours. Please ensure your documents are valid.
-            </div>
-          </Card>
-        </div>
-      )}
-      <div className={!isVerified ? "blur-sm pointer-events-none select-none grid gap-6 lg:grid-cols-2" : "grid gap-6 lg:grid-cols-2"}>
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Search Medicine (FEFO)</CardTitle>
@@ -345,8 +328,19 @@ export function BillingClient({ shopName, isVerified = true }: { shopName: strin
               <div className="flex justify-between border-t pt-2 font-bold"><span>Total</span><span>{formatCurrency(totals.total)}</span></div>
             </div>
 
-            <Button className="w-full" onClick={handleGenerateBill} disabled={isSaving || !cart.length}>
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Generate Bill"}
+            <Button 
+              className="w-full gap-2 font-semibold shadow-lg shadow-primary/25" 
+              onClick={() => {
+                if (!isVerified) {
+                  toast.error("Billing is locked in Trial Mode. Please upgrade/renew your subscription or wait for Admin verification to activate.");
+                  return;
+                }
+                handleGenerateBill();
+              }} 
+              disabled={isSaving || (!isVerified ? false : !cart.length)}
+            >
+              {!isVerified && <Lock className="h-4 w-4" />}
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : (!isVerified ? "Generate Bill (Locked)" : "Generate Bill")}
             </Button>
           </CardContent>
         </Card>

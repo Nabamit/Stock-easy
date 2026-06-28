@@ -110,6 +110,14 @@ export async function proxy(request: NextRequest) {
     if (session.role === "central_admin") {
       return NextResponse.redirect(new URL(ROUTES.adminDashboard, request.url));
     }
+    
+    // Redirect suspended shops to Settings/Support page only
+    if ((session as any).isSuspended) {
+      if (pathname !== "/settings") {
+        return NextResponse.redirect(new URL("/settings", request.url));
+      }
+    }
+
     // Staff route limitation
     if (session.role === "shop_staff") {
       const allowedPaths = ["/billing", "/inventory", "/ai", "/bills", "/sales"];

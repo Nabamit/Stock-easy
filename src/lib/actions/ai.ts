@@ -7,10 +7,11 @@ export async function askAiAssistantAction(question: string) {
   const { shopId, userId, session } = await getShopContext();
   const db = getDb();
 
-  if (!session.shopVerified) {
+  const isTrial = !session.shopVerified || (session as any).subscriptionStatus === "trial";
+  if (isTrial) {
     return {
       success: false,
-      answer: "AI Assistant is locked until your shop verification is approved by our central team.",
+      answer: "AI Assistant is locked in Trial Mode. Please upgrade/renew your subscription or wait for Admin verification to activate.",
     };
   }
 
@@ -285,10 +286,12 @@ export async function getAiAssistantLimitsAction() {
     .eq("shop_id", shopId)
     .gte("created_at", todayStr + "T00:00:00");
 
+  const isTrial = !session.shopVerified || (session as any).subscriptionStatus === "trial";
+
   return {
-    limit: session.shopVerified ? limits.aiAssistantLimit : 0,
+    limit: isTrial ? 0 : limits.aiAssistantLimit,
     used: count ?? 0,
     planName: limits.planName,
-    shopVerified: session.shopVerified,
+    shopVerified: session.shopVerified && (session as any).subscriptionStatus !== "trial",
   };
 }

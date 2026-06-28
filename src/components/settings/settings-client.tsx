@@ -21,8 +21,15 @@ import {
   deleteStaffAction,
 } from "@/lib/actions/settings";
 import { formatCurrency } from "@/lib/utils";
-
-export function SettingsClient({ isVerified = true }: { isVerified?: boolean }) {
+export function SettingsClient({ 
+  isVerified = true,
+  subscriptionStatus = "active",
+  isSuspended = false
+}: { 
+  isVerified?: boolean;
+  subscriptionStatus?: "trial" | "active" | "expired" | "cancelled" | null;
+  isSuspended?: boolean;
+}) {
   const [profile, setProfile] = useState<Awaited<ReturnType<typeof getShopProfileAction>>>(null);
   const [staff, setStaff] = useState<Awaited<ReturnType<typeof getStaffAction>>>([]);
   const [plans, setPlans] = useState<Awaited<ReturnType<typeof getSubscriptionPlansAction>>>([]);
@@ -44,6 +51,19 @@ export function SettingsClient({ isVerified = true }: { isVerified?: boolean }) 
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // Shop Profile Custom Upload and Save States
+  const [logoUrl, setLogoUrl] = useState("");
+  const [altPhone, setAltPhone] = useState("");
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUpdatingPhone, setIsUpdatingPhone] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      setLogoUrl(profile.shop_photo_url || "");
+      setAltPhone(profile.alternate_phone || "");
+    }
+  }, [profile]);
 
   const loadTickets = async () => {
     setLoadingTickets(true);
@@ -160,7 +180,14 @@ export function SettingsClient({ isVerified = true }: { isVerified?: boolean }) 
 
   useEffect(() => {
     load();
-  }, []);
+    if (isSuspended) {
+      setTab("support");
+    } else if (!isVerified) {
+      setTab("support");
+    } else if (subscriptionStatus === "trial") {
+      setTab("subscription");
+    }
+  }, [isVerified, subscriptionStatus, isSuspended]);
 
   if (!profile) {
     return (
@@ -175,12 +202,59 @@ export function SettingsClient({ isVerified = true }: { isVerified?: boolean }) 
 
   return (
     <div className="space-y-6">
+      {isSuspended && (
+        <Card className="border-red-650 bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/20 dark:to-red-900/10 dark:border-red-900/50 shadow-inner px-1 py-1">
+          <CardContent className="flex items-start gap-4 p-5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border border-red-200/50 dark:border-red-800/50 animate-pulse">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-red-850 dark:text-red-300 text-lg uppercase tracking-wider">
+                Account Suspended by Admin
+              </h3>
+              <p className="text-sm font-medium text-red-750 dark:text-red-400 mt-1">
+                Your account has been suspended for violating our terms and conditions. All other sections of the system are locked. Only Customer Support remains available for communication and revocation requests.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        {(["shop", "staff", "password", "subscription", "support"] as const).map((t) => (
-          <Button key={t} variant={tab === t ? "default" : "outline"} size="sm" onClick={() => setTab(t)}>
-            {t === "support" ? "Customer Service" : t.charAt(0).toUpperCase() + t.slice(1)}
-          </Button>
-        ))}
+        {(["shop", "staff", "password", "subscription", "support"] as const).map((t) => {
+          let isTabLocked = false;
+          let lockReason = "";
+          
+          if (isSuspended) {
+            isTabLocked = t !== "support";
+            lockReason = "locked because your account is suspended.";
+          } else if (!isVerified) {
+            isTabLocked = t !== "support";
+            lockReason = "locked in Trial Mode. Wait for Admin approval to activate.";
+          } else if (subscriptionStatus === "trial") {
+            isTabLocked = t !== "subscription" && t !== "support";
+            lockReason = "locked on the Trial Plan. Please renew or upgrade your subscription to unlock.";
+          }
+
+          return (
+            <Button 
+              key={t} 
+              variant={tab === t ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => {
+                if (isTabLocked) {
+                  toast.error(`${t.charAt(0).toUpperCase() + t.slice(1)} settings are ${lockReason}`);
+                  return;
+                }
+                setTab(t);
+              }}
+              className="gap-1.5"
+            >
+              {isTabLocked && <Lock className="mr-1 h-3.5 w-3.5" />}
+              {t === "support" ? "Customer Service" : t.charAt(0).toUpperCase() + t.slice(1)}
+            </Button>
+          );
+        })}
       </div>
 
       {tab === "shop" && (
@@ -200,34 +274,100 @@ export function SettingsClient({ isVerified = true }: { isVerified?: boolean }) 
               )}
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label>Shop Logo URL</Label>
-                  <Input
-                    defaultValue={String(profile.shop_photo_url ?? "")}
-                    placeholder="https://example.com/logo.png"
-                    onBlur={(e) => {
-                      startTransition(async () => {
-                        const r = await updateShopProfileAction({ shop_photo_url: e.target.value });
-                        if (r.success) toast.success("Logo URL updated");
-                        else toast.error(r.error || "Update failed");
-                      });
-                    }}
-                  />
+                <div className="space-y-2">
+                  <Label>Shop Photo</Label>
+                  <div className="flex items-center gap-4 rounded-lg border p-3 bg-muted/10">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-primary/5 border flex items-center justify-center text-xs text-muted-foreground uppercase">
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Shop Logo" className="h-full w-full object-cover" />
+                      ) : (
+                        "No Logo"
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <input
+                        type="file"
+                        id="shop-logo-upload"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          
+                          setIsUploadingLogo(true);
+                          try {
+                            const { uploadDocument } = await import("@/lib/supabase/storage");
+                            const publicUrl = await uploadDocument("shopPhoto", file);
+                            
+                            const r = await updateShopProfileAction({ shop_photo_url: publicUrl });
+                            if (r.success) {
+                              setLogoUrl(publicUrl);
+                              toast.success("Shop logo updated successfully!");
+                              setProfile((prev: any) => prev ? { ...prev, shop_photo_url: publicUrl } : null);
+                            } else {
+                              toast.error(r.error || "Failed to update profile logo");
+                            }
+                          } catch (err: any) {
+                            console.error(err);
+                            toast.error(err.message || "Failed to upload logo image");
+                          } finally {
+                            setIsUploadingLogo(false);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isUploadingLogo}
+                        onClick={() => document.getElementById("shop-logo-upload")?.click()}
+                      >
+                        {isUploadingLogo ? (
+                          <>
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          "Upload Image"
+                        )}
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">Supports JPEG, PNG, or GIF (max 5MB)</p>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label>Alternate Contact Phone</Label>
-                  <Input
-                    defaultValue={String(profile.phone || "")}
-                    placeholder="+91..."
-                    onBlur={(e) => {
-                      startTransition(async () => {
-                        const r = await updateShopProfileAction({ phone: e.target.value });
-                        if (r.success) toast.success("Alternate phone updated");
-                        else toast.error(r.error || "Update failed");
-                      });
-                    }}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="+91..."
+                      value={altPhone}
+                      onChange={(e) => setAltPhone(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      disabled={isUpdatingPhone}
+                      onClick={() => {
+                        setIsUpdatingPhone(true);
+                        startTransition(async () => {
+                          const r = await updateShopProfileAction({ alternate_phone: altPhone });
+                          if (r.success) {
+                            toast.success("Alternate phone number updated!");
+                            setProfile((prev: any) => prev ? { ...prev, alternate_phone: altPhone } : null);
+                          } else {
+                            toast.error(r.error || "Update failed");
+                          }
+                          setIsUpdatingPhone(false);
+                        });
+                      }}
+                    >
+                      {isUpdatingPhone ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Save"
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
                 <div>
